@@ -1,0 +1,33 @@
+server {
+    listen 80;
+    index index.php index.html;
+    error_log  /var/log/nginx/error.log;
+    access_log /var/log/nginx/access.log;
+    
+    # Esta es la ruta interna del contenedor donde está tu Laravel
+    root /var/www/html/public;
+
+    location / {
+        try_files $uri $uri/ /index.php?$query_string;
+    }
+
+    location ~ \.php$ {
+        try_files $uri =404;
+        fastcgi_split_path_info ^(.+\.php)(/.+)$;
+        
+        # 'app' es el nombre de tu servicio en el docker-compose.yml
+        fastcgi_pass app:9000;
+        fastcgi_index index.php;
+        include fastcgi_params;
+        fastcgi_param SCRIPT_FILENAME $document_root$fastcgi_script_name;
+        fastcgi_param PATH_INFO $fastcgi_path_info;
+        
+        # Ajustes de tiempo de espera para procesos largos
+        fastcgi_read_timeout 600;
+    }
+
+    # Bloquear acceso a archivos .ht (seguridad básica)
+    location ~ /\.ht {
+        deny all;
+    }
+}
