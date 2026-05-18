@@ -77,7 +77,6 @@ services:
     container_name: mundial_mailer
     restart: unless-stopped
     ports:
-      - "1025:1025"
       - "8025:8025"
     networks:
       - mundial_network

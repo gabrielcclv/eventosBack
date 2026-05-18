@@ -52,7 +52,7 @@ class AuthController extends Controller
     ]);
 
     // Enviar el correo
-    Mail::to($user->email)->send(new WelcomeMail($user, $passwordPlana));
+    Mail::to($user->email)->send(new WelcomeMail($user, $request->password));
 
     $token = $user->createToken('mundial_token')->plainTextToken;
 
