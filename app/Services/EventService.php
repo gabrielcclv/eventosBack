@@ -7,6 +7,7 @@ use App\Models\Registration;
 use App\Models\Review;
 use App\Models\User;
 use App\Notifications\EventCancelledNotification;
+use App\Notifications\EventRegisteredNotification;
 use Illuminate\Support\Str;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Storage;
@@ -21,14 +22,26 @@ class EventService
         return Event::create($data);
     }
 
-    public function updateEvent(Event $event, array $data, mixed $imageFile = null): Event
+
+    public function updateEventCoverImage(Event $event, mixed $imageFile): Event
     {
-        if ($imageFile) {
-            $filename = 'cover_' . Str::random(10) . '.' . $imageFile->getClientOriginalExtension();
-            Storage::disk('local')->put($filename, file_get_contents($imageFile->getRealPath()));
-            $data['image_url'] = Storage::url($filename);
+        if ($event->image_url) {
+            $oldFilename = basename($event->image_url);
+            Storage::disk('local')->delete($oldFilename);
         }
 
+        $filename = 'cover_' . Str::random(12) . '.' . $imageFile->getClientOriginalExtension();
+        Storage::disk('local')->put($filename, file_get_contents($imageFile->getRealPath()));
+        
+        $event->update([
+            'image_url' => Storage::url($filename)
+        ]);
+
+        return $event;
+    }
+
+    public function updateEvent(Event $event, array $data): Event
+    {
         $event->update($data);
         return $event;
     }
@@ -37,60 +50,82 @@ class EventService
     {
         DB::transaction(function () use ($event) {
             $event->update(['status' => 'cancelled']);
-            
-            $asistentes = $event->users;
-
-            foreach ($asistentes as $asistente) {
+            foreach ($event->users as $asistente) {
                 $asistente->notify(new EventCancelledNotification($event));
             }
-
             $event->delete();
         });
     }
 
+
     public function registerToEvent(int $eventId, User $user): Registration
     {
         return DB::transaction(function () use ($eventId, $user) {
-            $event = Event::findOrFail($eventId);
+            $event = Event::lockForUpdate()->findOrFail($eventId);
 
-            if ($event->status !== 'upcoming') {
-                throw ValidationException::withMessages(['event' => 'No puedes inscribirte a un evento que no esté próximo.']);
+            if ($event->status === 'cancelled' || $event->status === 'past') {
+                throw ValidationException::withMessages(['event' => 'No puedes inscribirte a un evento pasado o cancelado.']);
             }
+            
+            if ($event->status === 'sold_out' || $event->users()->count() >= $event->capacity) {
+                throw ValidationException::withMessages(['event' => 'El evento se encuentra completamente agotado.']);
+            }
+
             if ($event->users()->where('user_id', $user->id)->exists()) {
-                throw ValidationException::withMessages(['event' => 'Ya estás inscrito en este evento.']);
-            }
-            if ($event->users()->count() >= $event->capacity) {
-                throw ValidationException::withMessages(['event' => 'El evento se encuentra agotado.']);
+                throw ValidationException::withMessages(['event' => 'Ya te encuentras inscrito en este evento.']);
             }
 
             $uniqueCode = 'TKT-' . strtoupper(Str::random(10));
 
-            return Registration::create([
+            $registration = Registration::create([
                 'user_id' => $user->id,
                 'event_id' => $event->id,
                 'unique_code' => $uniqueCode,
                 'checked_in' => false,
             ]);
+
+            if ($event->users()->count() >= $event->capacity) {
+                $event->update(['status' => 'sold_out']);
+            }
+
+            $user->notify(new EventRegisteredNotification($event, $uniqueCode));
+
+            return $registration;
         });
     }
 
     public function cancelRegistration(int $eventId, User $user): void
     {
-        $registration = Registration::where('event_id', $eventId)
-            ->where('user_id', $user->id)
-            ->firstOrFail();
+        DB::transaction(function () use ($eventId, $user) {
+            $event = Event::lockForUpdate()->findOrFail($eventId);
+            
+            $registration = Registration::where('event_id', $event->id)
+                ->where('user_id', $user->id)
+                ->firstOrFail();
 
-        if ($registration->checked_in) {
-            throw ValidationException::withMessages(['registration' => 'No puedes cancelar una inscripción de un evento al que ya hiciste check-in.']);
-        }
+            if ($registration->checked_in) {
+                throw ValidationException::withMessages(['registration' => 'No puedes cancelar un ticket que ya ha sido validado.']);
+            }
 
-        $registration->delete();
+            $registration->delete();
+
+            if ($event->status === 'sold_out' && $event->users()->count() < $event->capacity) {
+                $event->update(['status' => 'upcoming']);
+            }
+        });
     }
-
 
     public function leaveReview(int $eventId, User $user, array $reviewData): Review
     {
         $event = Event::findOrFail($eventId);
+
+        $alreadyReviewed = Review::where('event_id', $event->id)
+            ->where('user_id', $user->id)
+            ->exists();
+
+        if ($alreadyReviewed) {
+            throw ValidationException::withMessages(['review' => 'Ya has dejado una valoración previa para este evento. No se permiten duplicados.']);
+        }
 
         $registration = Registration::where('event_id', $eventId)
             ->where('user_id', $user->id)
@@ -98,7 +133,7 @@ class EventService
             ->first();
 
         if (!$registration) {
-            throw ValidationException::withMessages(['review' => 'Solo puedes valorar eventos a los que hayas asistido (Check-in requerido).']);
+            throw ValidationException::withMessages(['review' => 'Solo puedes valorar eventos a los que hayas asistido físicamente (Check-in requerido).']);
         }
 
         return Review::create([
