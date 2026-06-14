@@ -2,19 +2,18 @@
 
 namespace App\Models;
 
-// use Illuminate\Contracts\Auth\MustVerifyEmail;
-use Database\Factories\UserFactory;
+use App\SearchTrait;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
+use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 use Illuminate\Foundation\Auth\User as Authenticatable;
 use Illuminate\Notifications\Notifiable;
-use App\Models\Comunidad;
-use App\Models\Prediccion;
 use Laravel\Sanctum\HasApiTokens;
 
 class User extends Authenticatable
 {
-    /** @use HasFactory<UserFactory> */
-    use HasFactory, Notifiable, HasApiTokens;
+    /** @use HasFactory<\Database\Factories\UserFactory> */
+    use HasFactory, Notifiable, HasApiTokens, SearchTrait;
 
     /**
      * The attributes that are mass assignable.
@@ -25,6 +24,7 @@ class User extends Authenticatable
         'name',
         'email',
         'password',
+        'is_organizer',
     ];
 
     /**
@@ -47,21 +47,25 @@ class User extends Authenticatable
         return [
             'email_verified_at' => 'datetime',
             'password' => 'hashed',
-            'is_admin' => 'boolean',
+            'is_organizer' => 'boolean', // Casteado a boolean automático
         ];
     }
 
-    public function comunidadesCreadas(){
-        return $this->hasMany(Comunidad::class, 'user_id');
+    public function createdEvents(): HasMany
+    {
+        return $this->hasMany(Event::class, 'organizer_id');
     }
 
-    public function comunidadesMiembro(){
-        return $this->belongsToMany(Comunidad::class,'comunidad_user','user_id','comunidad_id')
-        ->withPivot('status')
-        ->withTimestamps();
+    public function events(): BelongsToMany
+    {
+        return $this->belongsToMany(Event::class, 'registrations')
+            ->as('inscripciones')
+            ->withPivot(['unique_code', 'checked_in'])
+            ->withTimestamps();
     }
 
-    public function predicciones(){
-        return $this->hasMany(Prediccion::class, 'user_id');
+    public function reviews(): HasMany
+    {
+        return $this->hasMany(Review::class);
     }
 }

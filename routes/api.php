@@ -1,32 +1,28 @@
 <?php
 
-use Illuminate\Http\Request;
+use App\Http\Controllers\AuthController;
+use App\Http\Controllers\EventApiController;
+use App\Http\Controllers\UserApiController;
 use Illuminate\Support\Facades\Route;
-use App\Http\Controllers\Api\AuthController;
 
+Route::post('login', [AuthController::class, 'login']);
+Route::post('register', [AuthController::class, 'register']);
+Route::post('logout', [AuthController::class, 'logout']);
 
-Route::post('/register', [AuthController::class, 'register']);
-Route::post('/login', [AuthController::class, 'login']);
+Route::get('/v1/events', [EventApiController::class, 'index']);
+Route::get('/v1/events/{id}', [EventApiController::class, 'show']);
 
 Route::middleware('auth:sanctum')->group(function () {
-    Route::post('/comunidades', [App\Http\Controllers\Api\ComunidadController::class, 'store']);
-    Route::post('/comunidades/join', [App\Http\Controllers\Api\ComunidadController::class, 'join']);
-    Route::put('/comunidades/{comunidad}/miembros/{user}', [App\Http\Controllers\Api\ComunidadController::class, 'gestionarMiembro']);
-    Route::get('/comunidades/{id}/ranking', [App\Http\Controllers\Api\ComunidadController::class, 'ranking']);
-    Route::delete('/comunidades/{comunidad}/miembros/{user}', [App\Http\Controllers\Api\ComunidadController::class, 'eliminarMiembro']);
+    
+    Route::patch('/v1/users/become-organizer', [UserApiController::class, 'becomeOrganizer']);
+    Route::get('/v1/users/tickets', [UserApiController::class, 'myTickets']);
 
-    Route::get('/partidos', [App\Http\Controllers\Api\PartidoController::class, 'index']);
-    Route::post('/partidos', [App\Http\Controllers\Api\PartidoController::class, 'store']);
-    Route::put('/partidos/{id}/resultado', [App\Http\Controllers\Api\PartidoController::class, 'updateResultado']);
-    Route::post('/partidos/importar', [App\Http\Controllers\Api\PartidoController::class, 'importar']);
+    Route::post('/v1/events', [EventApiController::class, 'store']);
+    Route::put('/v1/events/{id}', [EventApiController::class, 'update']);
+    Route::delete('/v1/events/{id}', [EventApiController::class, 'destroy']);
+    Route::post('/v1/events/{id}/check-in', [EventApiController::class, 'checkIn']);
 
-    Route::post('/predicciones', [App\Http\Controllers\Api\PrediccionController::class, 'store']);
-    Route::get('/predicciones', [App\Http\Controllers\Api\PrediccionController::class, 'index']);
-
-    Route::get('/user', function (Request $request) {
-        return response()->json([
-            'success' => true,
-            'user' => $request->user()
-        ]);
-});
+    Route::post('/v1/events/{id}/register', [EventApiController::class, 'register']);
+    Route::delete('/v1/events/{id}/register', [EventApiController::class, 'cancelRegistration']);
+    Route::post('/v1/events/{id}/reviews', [EventApiController::class, 'storeReview']);
 });
