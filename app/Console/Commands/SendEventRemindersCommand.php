@@ -5,7 +5,9 @@ namespace App\Console\Commands;
 use App\Models\Event;
 use App\Notifications\EventReminderNotification;
 use Illuminate\Console\Command;
+use Illuminate\Support\Facades\Schedule;
 
+Schedule::command('events:send-reminders')->daily();
 class SendEventRemindersCommand extends Command
 {
     protected $signature = 'events:send-reminders';
