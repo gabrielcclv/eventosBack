@@ -75,9 +75,8 @@ class EventViewController extends Controller
             'image_url' => 'nullable|url',
         ]);
 
-        $validated['organizer_id'] = auth()->id();
-
-        $event = $this->eventService->createEvent($validated);
+        // CORREGIDO: Pasamos los datos validados y el ID del usuario autenticado por separado como requiere el servicio
+        $event = $this->eventService->createEvent($validated, auth()->id());
 
         return redirect()->route('events.show', $event)->with('success', 'Evento creado exitosamente');
     }
@@ -120,7 +119,8 @@ class EventViewController extends Controller
     public function register(Request $request, Event $event)
     {
         try {
-            $this->eventService->registerToEvent(auth()->user(), $event);
+            // CORREGIDO: Primero el ID del evento (int), segundo el Objeto User
+            $this->eventService->registerToEvent($event->id, auth()->user());
             return redirect()->back()->with('success', 'Te has inscrito al evento exitosamente');
         } catch (\Exception $e) {
             return redirect()->back()->with('error', $e->getMessage());
@@ -130,7 +130,8 @@ class EventViewController extends Controller
     public function cancelRegistration(Event $event)
     {
         try {
-            $this->eventService->cancelRegistration(auth()->user(), $event);
+            // CORREGIDO: Primero el ID del evento (int), segundo el Objeto User
+            $this->eventService->cancelRegistration($event->id, auth()->user());
             return redirect()->back()->with('success', 'Te has desinscrito del evento');
         } catch (\Exception $e) {
             return redirect()->back()->with('error', $e->getMessage());
@@ -145,7 +146,8 @@ class EventViewController extends Controller
         ]);
 
         try {
-            $this->eventService->leaveReview(auth()->user(), $event, $validated['rating'], $validated['comment'] ?? null);
+            // CORREGIDO: Enviamos el ID del evento, el objeto User y el array con los datos de la reseña
+            $this->eventService->leaveReview($event->id, auth()->user(), $validated);
             return redirect()->back()->with('success', 'Reseña publicada exitosamente');
         } catch (\Exception $e) {
             return redirect()->back()->with('error', $e->getMessage());
@@ -198,7 +200,8 @@ class EventViewController extends Controller
         ]);
 
         try {
-            $this->eventService->checkInTicket($event, $validated['code']);
+            // CORREGIDO: Enviamos el ID del evento, el código de ticket y el ID del organizador autenticado
+            $this->eventService->checkInTicket($event->id, $validated['code'], auth()->id());
             return redirect()->back()->with('success', 'Check-in realizado exitosamente');
         } catch (\Exception $e) {
             return redirect()->back()->with('error', $e->getMessage());
